@@ -8,7 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import WRITERS, get_current_user, get_pet_with_access
+from app.deps import get_current_user
+from app.permissions import get_pet_with_permission
 from app.models import MedicationLogs, Medications, Users
 from app.schemas import LogCreate, LogOut, SlotOut
 from app.services.schedule import slots_for_day
@@ -38,7 +39,7 @@ def day_slots(med_id: int, day: date | None = None, db: Session = Depends(get_db
               user: Users = Depends(get_current_user)):
     """Tomas programadas de un día (por defecto hoy) y si ya se registraron."""
     med = _get_med(db, med_id)
-    get_pet_with_access(db, med.pet_id, user)
+    get_pet_with_permission(db, med.pet_id, user, "read")
     tz = ZoneInfo(user.timezone)
     day = day or datetime.now(tz).date()
     slots = slots_for_day(med, day, tz)
@@ -70,7 +71,7 @@ def register_dose(med_id: int, data: LogCreate, db: Session = Depends(get_db),
                   user: Users = Depends(get_current_user)):
     """Registra una toma ("ya se la di") o la salteada. No permite duplicar la misma toma."""
     med = _get_med(db, med_id)
-    get_pet_with_access(db, med.pet_id, user, WRITERS)
+    get_pet_with_permission(db, med.pet_id, user, "log_dose")
     tz = ZoneInfo(user.timezone)
 
     scheduled_at = _aware(data.scheduled_at, tz)
@@ -129,7 +130,7 @@ def register_dose(med_id: int, data: LogCreate, db: Session = Depends(get_db),
 def list_logs(med_id: int, limit: int = 50, db: Session = Depends(get_db),
               user: Users = Depends(get_current_user)):
     med = _get_med(db, med_id)
-    get_pet_with_access(db, med.pet_id, user)
+    get_pet_with_permission(db, med.pet_id, user, "read")
     logs = db.scalars(
         select(MedicationLogs)
         .where(MedicationLogs.medication_id == med.id)

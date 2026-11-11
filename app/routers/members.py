@@ -3,7 +3,8 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import OWNERS, get_current_user, get_membership, require_role
+from app.deps import get_current_user
+from app.permissions import get_membership, require_permission
 from app.models import HouseholdMembers, Pets, Reminders, Users
 from app.schemas import MemberOut, MemberUpdate
 
@@ -53,7 +54,7 @@ def list_members(household_id: int, db: Session = Depends(get_db),
 @router.patch("/households/{household_id}/members/{user_id}", response_model=MemberOut)
 def change_role(household_id: int, user_id: int, data: MemberUpdate, db: Session = Depends(get_db),
                 user: Users = Depends(get_current_user)):
-    require_role(db, household_id, user, OWNERS)
+    require_permission(db, household_id, user, "manage_house")
     target = db.get(HouseholdMembers, (household_id, user_id))
     if target is None:
         raise HTTPException(status_code=404, detail="No encontrado")

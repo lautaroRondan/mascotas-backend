@@ -3,7 +3,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import WRITERS, get_current_user, get_pet_with_access
+from app.deps import get_current_user
+from app.permissions import get_pet_with_permission
 from app.models import Users, Vaccines, VetVisits
 from app.schemas import VaccineCreate, VaccineOut, VaccineUpdate
 
@@ -29,7 +30,7 @@ def _check_visit_belongs_to_pet(db: Session, visit_id: int | None, pet_id: int) 
 @router.post("/pets/{pet_id}/vaccines", response_model=VaccineOut, status_code=201)
 def create_vaccine(pet_id: int, data: VaccineCreate, db: Session = Depends(get_db),
                    user: Users = Depends(get_current_user)):
-    get_pet_with_access(db, pet_id, user, WRITERS)
+    get_pet_with_permission(db, pet_id, user, "edit")
     _check_visit_belongs_to_pet(db, data.vet_visit_id, pet_id)
     vaccine = Vaccines(pet_id=pet_id, created_by=user.id, **data.model_dump())
     db.add(vaccine)
@@ -41,7 +42,7 @@ def create_vaccine(pet_id: int, data: VaccineCreate, db: Session = Depends(get_d
 @router.get("/pets/{pet_id}/vaccines", response_model=list[VaccineOut])
 def list_vaccines(pet_id: int, db: Session = Depends(get_db),
                   user: Users = Depends(get_current_user)):
-    get_pet_with_access(db, pet_id, user)
+    get_pet_with_permission(db, pet_id, user, "read")
     return db.scalars(
         select(Vaccines).where(Vaccines.pet_id == pet_id).order_by(Vaccines.applied_on.desc())
     ).all()
@@ -51,7 +52,7 @@ def list_vaccines(pet_id: int, db: Session = Depends(get_db),
 def update_vaccine(vaccine_id: int, data: VaccineUpdate, db: Session = Depends(get_db),
                    user: Users = Depends(get_current_user)):
     vaccine = _get_vaccine(db, vaccine_id)
-    get_pet_with_access(db, vaccine.pet_id, user, WRITERS)
+    get_pet_with_permission(db, vaccine.pet_id, user, "edit")
     changes = data.model_dump(exclude_unset=True)
     if "vet_visit_id" in changes:
         _check_visit_belongs_to_pet(db, changes["vet_visit_id"], vaccine.pet_id)
@@ -71,6 +72,6 @@ def update_vaccine(vaccine_id: int, data: VaccineUpdate, db: Session = Depends(g
 def delete_vaccine(vaccine_id: int, db: Session = Depends(get_db),
                    user: Users = Depends(get_current_user)):
     vaccine = _get_vaccine(db, vaccine_id)
-    get_pet_with_access(db, vaccine.pet_id, user, WRITERS)
+    get_pet_with_permission(db, vaccine.pet_id, user, "edit")
     db.delete(vaccine)
     db.commit()

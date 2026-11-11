@@ -6,7 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.deps import OWNERS, get_current_user, require_role
+from app.deps import get_current_user
+from app.permissions import require_permission
 from app.models import HouseholdInvitations, HouseholdMembers, Households, Users
 from app.schemas import HouseholdOut, InvitationCreate, InvitationOut, InvitationPreview
 
@@ -35,7 +36,7 @@ def _get_usable_invitation(db: Session, code: str, lock: bool = False) -> Househ
 @router.post("/households/{household_id}/invitations", response_model=InvitationOut, status_code=201)
 def create_invitation(household_id: int, data: InvitationCreate, db: Session = Depends(get_db),
                       user: Users = Depends(get_current_user)):
-    require_role(db, household_id, user, OWNERS)
+    require_permission(db, household_id, user, "manage_house")
     inv = HouseholdInvitations(
         household_id=household_id,
         code=secrets.token_urlsafe(16),
@@ -54,7 +55,7 @@ def create_invitation(household_id: int, data: InvitationCreate, db: Session = D
 def list_invitations(household_id: int, db: Session = Depends(get_db),
                      user: Users = Depends(get_current_user)):
     """Invitaciones pendientes (sin usar y sin vencer)."""
-    require_role(db, household_id, user, OWNERS)
+    require_permission(db, household_id, user, "manage_house")
     return db.scalars(
         select(HouseholdInvitations)
         .where(
@@ -69,7 +70,7 @@ def list_invitations(household_id: int, db: Session = Depends(get_db),
 @router.delete("/households/{household_id}/invitations/{invitation_id}", status_code=204)
 def revoke_invitation(household_id: int, invitation_id: int, db: Session = Depends(get_db),
                       user: Users = Depends(get_current_user)):
-    require_role(db, household_id, user, OWNERS)
+    require_permission(db, household_id, user, "manage_house")
     inv = db.get(HouseholdInvitations, invitation_id)
     if inv is None or inv.household_id != household_id:
         raise HTTPException(status_code=404, detail="No encontrado")
